@@ -6,6 +6,12 @@
 	"timezone": "Europe/Zurich",
 
 	"#": "optional",
+	"username": "vagrant",
+
+	"#": "optional",
+	"userpass": "vagrant",
+
+	"#": "optional",
 	"#": "each of these commands will be executed before the installer exits",
 	"post_installation_commands":[
 		"/tmp/pentoo-iso-tester/setup-vagrant-ssh-key.sh \"${DESTDIR}\" \"${INSTALLER_CONFIGFILE}\"",

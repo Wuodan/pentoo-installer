@@ -87,19 +87,28 @@ setbootopts() {
 # parameters (required)
 #  _USERNAME: Name of the user
 #
+# parameters (optional)
+#  _PASSWORD: Preset password of the user
+#
 # returns $ERROR_CANCEL=64 on user cancel
 # anything else is a real error
 # reason: show_dialog() needs a way to exit "Cancel"
 #
 setpassword(){
 	# check input
-	check_num_args "${FUNCNAME}" 1 $# || return $?
+	( check_num_args "${FUNCNAME}" 1 $# || check_num_args "${FUNCNAME}" 2 $# ) || return $?
 	local _USERNAME="${1}"
 	local _PASSWORD=
 	local _PASSWORD2=
+    if [ $# -gt 1 ]; then
+        _PASSWORD="${2}"
+        _PASSWORD2="${2}"
+    fi
 	local _RET_SUB=
-	_PASSWORD="$(show_dialog --clear --insecure --passwordbox "Enter a password for user '${_USERNAME}'" 17 70)" || return $?
-	_PASSWORD2="$(show_dialog --clear --insecure --passwordbox "Confirm password for user '${_USERNAME}'" 17 70)" || return $?
+    if [ -z "${_PASSWORD}" ]; then
+        _PASSWORD="$(show_dialog --clear --insecure --passwordbox "Enter a password for user '${_USERNAME}'" 17 70)" || return $?
+        _PASSWORD2="$(show_dialog --clear --insecure --passwordbox "Confirm password for user '${_USERNAME}'" 17 70)" || return $?
+    fi
 	if [ "${_PASSWORD}" != "${_PASSWORD2}" ]; then
 		show_dialog --msgbox "Passwords do not match, unable to set password.  Please try again." 7 30
 		return 1
@@ -151,11 +160,25 @@ MENU_ITEMS=("Editor"				"System Editor" \
 			"Change-Hostname"	"Change your hostname from pentoo" \
 			"DONE"			"Return to Main Menu" )
 
+# settings for headless mode
+USERNAME_PRESET=
+PASSWORD_PRESET=
+if [ -n "${INSTALLER_HEADLESS:-}" ]; then
+    DEFAULTITEM='--default-item DONE'
+    if [ -n "${INSTALLER_CONFIGFILE}" ]; then
+        # remove comments
+        CONF_FULL="$(< "${INSTALLER_CONFIGFILE}" jq 'del(..|.["#"]?)')" || exit $?
+        # check if username and password are set
+        if echo "${CONF_FULL}" | jq -e ".username" 1>/dev/null \
+            && echo "${CONF_FULL}" | jq -e ".userpass" 1>/dev/null; then
+            USERNAME_PRESET="$(echo "${CONF_FULL}" | jq -re ".username")" || exit $?
+            PASSWORD_PRESET="$(echo "${CONF_FULL}" | jq -re ".userpass")" || exit $?
+            DEFAULTITEM='--default-item Set-Username'
+        fi
+    fi
+fi
+
 while true; do
-	# shortcut for headless mode
-	if [ -n "${INSTALLER_HEADLESS:-}" ]; then
-		DEFAULTITEM='--default-item DONE'
-	fi
 	# expand menu items array below
 	NEWSELECTION="$(show_dialog ${DEFAULTITEM} --menu "Configuration" \
 		0 0 0 "${MENU_ITEMS[@]}")" || exit $?
@@ -181,15 +204,18 @@ while true; do
 			RETSUB=$?
 			;;
 		"Set-Username")
-			USERNAME="$(show_dialog --inputbox "Enter a username" 17 70)" \
+			USERNAME="$(show_dialog --inputbox "Enter a username" 17 70 "${USERNAME_PRESET}")" \
 				&& chroot "${DESTDIR}" usermod -l ${USERNAME} pentoo >> ${LOG} \
 				&& chroot "${DESTDIR}" usermod -d /home/${USERNAME} -m ${USERNAME} >> ${LOG} \
-				&& setpassword "${USERNAME}" 2> /dev/null
+				&& setpassword "${USERNAME}" "${PASSWORD_PRESET}" 2> /dev/null
 				RETSUB=$?
 				if [ "${RETSUB}" = 0 ]; then
 					[ -w "${DESTDIR}/home/${USERNAME}/.config/gtk-3.0/bookmarks" ] && sed -i "s#/home/pentoo#/home/${USERNAME}#" "${DESTDIR}/home/${USERNAME}/.config/gtk-3.0/bookmarks"
 					[ -d "${DESTDIR}/home/${USERNAME}/.config/xfce4/desktop/" ] && find "${DESTDIR}/home/${USERNAME}/.config/xfce4/desktop/" -name "icons.*.rc" -print0 | xargs -0 -I {} -P 0 sed -i -e "s#/home/pentoo#/home/${USERNAME}#" {}
 					[ -d "${DESTDIR}/home/${USERNAME}/.config/xfce4/xfconf/xfce-perchannel-xml/" ] && find "${DESTDIR}/home/${USERNAME}/.config/xfce4/xfconf/xfce-perchannel-xml/" -name "*.xml" -print0 | xargs -0 -I {} -P 0 sed -i "s#/home/pentoo#/home/${USERNAME}#" {}
+				fi
+				if [ -n "${INSTALLER_HEADLESS:-}" ]; then
+					DEFAULTITEM='--default-item DONE'
 				fi
 			;;
 		"Change-Hostname")
