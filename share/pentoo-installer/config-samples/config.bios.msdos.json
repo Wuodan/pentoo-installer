@@ -5,6 +5,12 @@
 	"#": "optional",
 	"timezone": "Europe/Zurich",
 
+	"#": "optional",
+	"username": "vagrant",
+
+	"#": "optional",
+	"userpass": "vagrant",
+
 	"#": "required",
 	"disks":[
 		{
