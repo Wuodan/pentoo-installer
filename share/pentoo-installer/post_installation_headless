@@ -1,0 +1,63 @@
+#!/bin/bash -x
+# This script is released under the GNU General Public License 3.0
+# Check the COPYING file included with this distribution
+
+# post_installation_headless
+# gives user choices to further edit target system
+# used in headless mode with a config file
+# checks the config file for any additional commands to run 
+# and executes them
+#
+# parameters (required)
+#  CONFIG_LIST: One string items of defined FSspec
+#
+# returns 0 on success
+# returns $ERROR_CANCEL=64 on user cancel
+# anything else is a real error
+# reason: show_dialog() needs a way to exit "Cancel"
+#
+# writes menus and noise to STDERR
+
+# location of other scripts to source
+readonly SHAREDIR="$(dirname ${0})" || exit $?
+
+# source common variables, functions and error handling
+source "${SHAREDIR}"/common.sh || exit $?
+
+#########################################
+## START: dialog functions/definitions ##
+## END: dialog functions/definitions ##
+#######################################
+
+#####################
+## begin execution ##
+
+# check input
+check_num_args "$(basename $0)" 1 $# || exit $?
+CONFIG_LIST="${1}"
+
+# remove comments
+CONF_FULL="$(cat "${INSTALLER_CONFIGFILE}" | jq 'del(..|.["#"]?)')" || exit $?
+
+# search in the config file for 'post_installation_commands'
+if echo "${CONF_FULL}" | jq -e ".post_installation_commands" 1>/dev/null \
+
+    # mount everything, including cryptsetup
+    "${SHAREDIR}"/FSspec mountall "${CONFIG_LIST}" || exit $?
+
+    chroot_mount || exit $?
+
+    # get array of commands
+    CONF_COMMANDS="$(echo "${CONF_FULL}" | jq '..|.post_installation_commands? // empty')" || exit $?
+    LEN_COMMANDS="$(echo "${CONF_COMMANDS}" | jq -j 'length')" || exit $?
+    for (( COMMANDNUM=0; COMMANDNUM<${LEN_COMMANDS}; COMMANDNUM++ )); do
+        COMMAND="$(echo "${CONF_COMMANDS}" | jq -j ".[${COMMANDNUM}]")" || exit $?
+        # execute commands with parameters
+        ${COMMAND}
+    done
+
+    chroot_umount || exit $?
+
+fi
+
+exit 0

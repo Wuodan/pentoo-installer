@@ -330,6 +330,14 @@ while [ true ]; do
 			RETSUB=$?
 			;;
 		"6")
+			if [[ "${INSTALLER_HEADLESS}" -eq "1" && -n "${INSTALLER_CONFIGFILE}" ]]; then
+				"${SHAREDIR}"/post_installation_headless "${CONFIG_LIST}"
+				RETSUB=$?
+				if [ "${RETSUB}" -ne 0 ]; then
+					echo "Post installation script failed"
+					exit "${RETSUB}"
+				fi
+			fi
 			# umount all again and close cryptsetup
 			"${SHAREDIR}"/FSspec umountall "${CONFIG_LIST}"
 			RETSUB=$?
